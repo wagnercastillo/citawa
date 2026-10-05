@@ -12,6 +12,7 @@ import { RolesGuard } from './auth/roles.guard';
 import { dataSourceOptions } from './database/data-source';
 import { HealthController } from './health.controller';
 import { User } from './users/user.entity';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { User } from './users/user.entity';
     }),
     AuthModule,
     AdminModule,
+    UsersModule,
   ],
   controllers: [HealthController],
   providers: [
