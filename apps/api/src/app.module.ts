@@ -5,6 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { resolve } from 'path';
+import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
@@ -30,6 +31,7 @@ import { User } from './users/user.entity';
       }),
     }),
     AuthModule,
+    AdminModule,
   ],
   controllers: [HealthController],
   providers: [
