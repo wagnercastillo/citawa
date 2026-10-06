@@ -31,6 +31,7 @@ export class FakeD360 {
   channelKeys: { partner: { partnerId: string; apiKey: string }; channelId: string }[] = [];
   partnerError: Error | null = null;
   templateCreateError: Error | null = null;
+  listError: Error | null = null;
   private seq = 0;
 
   async send(creds: D360Credentials, payload: AnyPayload): Promise<{ waMessageId: string }> {
@@ -53,6 +54,7 @@ export class FakeD360 {
   }
 
   async listTemplates(): Promise<{ name: string; status: string; rejected_reason?: string | null }[]> {
+    if (this.listError) throw this.listError;
     return this.templateList;
   }
 
@@ -72,5 +74,6 @@ export class FakeD360 {
     this.channelKeys = [];
     this.partnerError = null;
     this.templateCreateError = null;
+    this.listError = null;
   }
 }

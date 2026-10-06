@@ -17,23 +17,30 @@ export class WhatsappTemplatesService {
 
   constructor(@InjectDataSource() private readonly ds: DataSource, private readonly d360: D360Client) {}
 
-  /** Crea en 360dialog las plantillas del spec (si ya existen, sigue) y sincroniza su estado. */
+  /**
+   * Crea en 360dialog las plantillas del spec y sincroniza su estado. Al (re)conectar todo vuelve a PENDING:
+   * el número puede ser otro y solo 360dialog sabe qué está aprobado en esa cuenta.
+   */
   async provision(clinicId: string, creds: D360Credentials): Promise<void> {
+    await this.ensureRows(clinicId);
+    await this.ds.query(`UPDATE whatsapp_templates SET status = 'PENDING', rejection_reason = NULL, updated_at = now() WHERE clinic_id = $1`, [clinicId]);
     for (const def of TEMPLATE_DEFS) {
       try {
         await this.d360.createTemplate(creds, templateCreatePayload(def));
       } catch (e) {
-        this.logger.warn(`Plantilla ${def.name} (${clinicId}): ${(e as Error).message}`);
+        const message = (e as Error).message;
+        this.logger.warn(`Plantilla ${def.name} (${clinicId}): ${message}`);
+        // "Ya existe" es normal al reconectar; cualquier otro error se muestra al dueño como rechazo.
+        if (!/exist/i.test(message)) {
+          await this.ds.getRepository(WhatsappTemplate).update({ clinicId, name: def.name }, { status: WaTemplateStatus.REJECTED, rejectionReason: message });
+        }
       }
-      await this.ds.query(
-        `INSERT INTO whatsapp_templates (clinic_id, name) VALUES ($1, $2) ON CONFLICT (clinic_id, name) DO NOTHING`,
-        [clinicId, def.name],
-      );
     }
     await this.refresh(clinicId, creds).catch((e) => this.logger.warn(`No se pudo consultar plantillas: ${(e as Error).message}`));
   }
 
   async refresh(clinicId: string, creds: D360Credentials): Promise<void> {
+    await this.ensureRows(clinicId);
     const remote = await this.d360.listTemplates(creds);
     for (const def of TEMPLATE_DEFS) {
       const t = remote.find((r) => r.name === def.name);
@@ -42,6 +49,15 @@ export class WhatsappTemplatesService {
       await this.ds.getRepository(WhatsappTemplate).update(
         { clinicId, name: def.name },
         { status, rejectionReason: status === WaTemplateStatus.REJECTED ? (t.rejected_reason ?? 'Rechazada por Meta') : null },
+      );
+    }
+  }
+
+  private async ensureRows(clinicId: string): Promise<void> {
+    for (const def of TEMPLATE_DEFS) {
+      await this.ds.query(
+        `INSERT INTO whatsapp_templates (clinic_id, name) VALUES ($1, $2) ON CONFLICT (clinic_id, name) DO NOTHING`,
+        [clinicId, def.name],
       );
     }
   }

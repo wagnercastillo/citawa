@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 
 function Callback() {
@@ -12,9 +12,9 @@ function Callback() {
   const [failed, setFailed] = useState(false);
   const sent = useRef(false);
 
-  useEffect(() => {
-    if (sent.current) return;
-    sent.current = true;
+  const complete = useCallback(() => {
+    setFailed(false);
+    setMessage('Conectando tu WhatsApp…');
     const state = params.get('state') ?? '';
     const channels = params.get('channels') ?? '';
     api('/whatsapp/onboarding/complete', { method: 'POST', body: JSON.stringify({ state, channels }) })
@@ -33,10 +33,21 @@ function Callback() {
       });
   }, [params, router]);
 
+  useEffect(() => {
+    if (sent.current) return;
+    sent.current = true;
+    complete();
+  }, [complete]);
+
   return (
     <main className="mx-auto max-w-md space-y-4 p-8 text-center">
       <p className={failed ? 'text-red-600' : ''}>{message}</p>
-      {failed && <Link href="/app/settings" className="text-sm underline">Volver a Configuración</Link>}
+      {failed && (
+        <div className="flex justify-center gap-4 text-sm">
+          <button type="button" onClick={complete} className="underline">Reintentar</button>
+          <Link href="/app/settings" className="underline">Volver a Configuración</Link>
+        </div>
+      )}
     </main>
   );
 }

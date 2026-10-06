@@ -50,18 +50,20 @@ export class OnboardingService {
     const [channelId] = parseChannels(channels);
     if (!channelId) throw new BadRequestException('360dialog no devolvió ningún número conectado');
 
-    let key: { apiKey: string; address: string };
+    let account: WhatsappAccountDto;
     try {
-      key = await this.d360.createChannelApiKey(partner, channelId);
+      let key: { apiKey: string; address: string };
+      try {
+        key = await this.d360.createChannelApiKey(partner, channelId);
+      } catch (e) {
+        throw new BadGatewayException(`360dialog no entregó la API key: ${(e as Error).message}`);
+      }
+      account = await this.accounts.attach(user.clinicId!, { apiKey: key.apiKey, phoneNumber: key.address, sandbox: false, channelId });
     } catch (e) {
-      throw new BadGatewayException(`360dialog no entregó la API key: ${(e as Error).message}`);
+      // El fallo más común es "canal aún no listo": se libera el state para que el dueño reintente sin repetir el popup.
+      await this.ds.getRepository(OnboardingState).update({ stateHash: hash(state) }, { usedAt: null });
+      throw e;
     }
-    const account = await this.accounts.attach(user.clinicId!, {
-      apiKey: key.apiKey,
-      phoneNumber: key.address,
-      sandbox: false,
-      channelId,
-    });
     return { account, templates: await this.templates.list(user.clinicId!) };
   }
 

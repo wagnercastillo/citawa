@@ -4,7 +4,7 @@ import { DataSource } from 'typeorm';
 import { Role } from '../src/users/role.enum';
 import { TemplateStatusPoller } from '../src/whatsapp/template-status.poller';
 import { FakeD360 } from './fakes';
-import { createAppWithFakes, resetDb, seedClinic, seedUser } from './utils';
+import { createAppWithFakes, resetDb, seedClinic, seedUser, seedWhatsapp } from './utils';
 
 describe('plantillas de WhatsApp', () => {
   let app: INestApplication;
@@ -70,5 +70,31 @@ describe('plantillas de WhatsApp', () => {
     const res = await connect();
     expect(res.body.status).toBe('CONNECTED');
     expect(await rows()).toHaveLength(3);
+  });
+
+  it('el poller revisa cuentas sin filas y detecta cambios en plantillas ya aprobadas', async () => {
+    await seedWhatsapp(app, clinicId, { templates: false });
+    d360.templateList = ['recordatorio_cita_24h', 'recordatorio_cita_2h', 'recordatorio_pago'].map((name) => ({ name, status: 'approved' }));
+    await app.get(TemplateStatusPoller).runOnce();
+    expect((await rows()).map((r: { status: string }) => r.status)).toEqual(['APPROVED', 'APPROVED', 'APPROVED']);
+    d360.templateList[0].status = 'paused';
+    await app.get(TemplateStatusPoller).runOnce();
+    expect((await rows())[0].status).toBe('PAUSED');
+  });
+
+  it('un error real al crear la plantilla queda como rechazada con el motivo', async () => {
+    d360.templateCreateError = new Error('Invalid parameter: example');
+    await connect();
+    expect(await rows()).toEqual(
+      ['recordatorio_cita_24h', 'recordatorio_cita_2h', 'recordatorio_pago'].map((name) => ({ name, status: 'REJECTED', rejection_reason: 'Invalid parameter: example' })),
+    );
+  });
+
+  it('reconectar vuelve las plantillas a PENDING hasta que 360dialog confirme su estado', async () => {
+    await connect();
+    await ds.query(`UPDATE whatsapp_templates SET status = 'APPROVED' WHERE clinic_id = $1`, [clinicId]);
+    d360.listError = new Error('timeout');
+    await connect();
+    expect((await rows()).map((r: { status: string }) => r.status)).toEqual(['PENDING', 'PENDING', 'PENDING']);
   });
 });

@@ -48,4 +48,4 @@ npm run test:api              # unit + e2e (usa la base recepcionista_test)
    Elegir **Partner Payment** (tú pagas 360dialog y Meta).
 2. **Redirect URL:** en el Partner Hub, configurar como redirect URL `${WEB_URL}/app/settings/whatsapp/callback`.
 3. **Conectar:** el dueño entra a **Configuración → WhatsApp → Conectar WhatsApp**, completa el popup y vuelve. Las 3 plantillas se crean solas y su estado se actualiza cada 15 min. Cuando están aprobadas, aparece "Listo para enviar".
-4. **Si falla la key del canal:** si 360dialog responde que el canal no está listo ("not running"), esperar unos minutos y reconectar.
+4. **Si falla la key del canal:** si 360dialog responde que el canal no está listo ("not running"), esperar unos minutos y pulsar **Reintentar** en la misma página (el enlace sigue valiendo 30 min).

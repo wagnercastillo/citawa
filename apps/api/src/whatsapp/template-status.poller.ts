@@ -6,7 +6,7 @@ import { WhatsappAccount } from './whatsapp-account.entity';
 import { WhatsappAccountsService } from './whatsapp-accounts.service';
 import { WhatsappTemplatesService } from './whatsapp-templates.service';
 
-/** Cada 15 min consulta 360dialog para los consultorios con plantillas aún no aprobadas. */
+/** Cada 15 min consulta 360dialog para cada cuenta de producción (Meta también pausa o deshabilita plantillas aprobadas). */
 @Injectable()
 export class TemplateStatusPoller {
   private readonly logger = new Logger(TemplateStatusPoller.name);
@@ -25,9 +25,7 @@ export class TemplateStatusPoller {
 
   async runOnce(): Promise<number> {
     const clinicIds: { clinic_id: string }[] = await this.ds.query(
-      `SELECT DISTINCT t.clinic_id FROM whatsapp_templates t
-       JOIN whatsapp_accounts a ON a.clinic_id = t.clinic_id AND a.status = 'CONNECTED' AND NOT a.sandbox
-       WHERE t.status = 'PENDING'`,
+      `SELECT clinic_id FROM whatsapp_accounts WHERE status = 'CONNECTED' AND NOT sandbox`,
     );
     for (const { clinic_id } of clinicIds) {
       const account = await this.ds.getRepository(WhatsappAccount).findOneByOrFail({ clinicId: clinic_id });

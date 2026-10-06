@@ -90,6 +90,15 @@ describe('onboarding de WhatsApp (dueño)', () => {
     expect(res.body.message).toContain('channel not running');
   });
 
+  it('si la Partner API falla, el mismo state sirve para reintentar', async () => {
+    const state = await start();
+    d360.partnerError = new Error('channel not running');
+    await owner.post('/api/whatsapp/onboarding/complete').send({ state, channels: '[ch_1]' }).expect(502);
+    d360.partnerError = null;
+    await owner.post('/api/whatsapp/onboarding/complete').send({ state, channels: '[ch_1]' }).expect(201);
+    await owner.post('/api/whatsapp/onboarding/complete').send({ state, channels: '[ch_1]' }).expect(400);
+  });
+
   it('solo el dueño; sin configuración del partner → 503', async () => {
     const recep = await loginAs('recep@a.com');
     await recep.post('/api/whatsapp/onboarding/start').expect(403);
