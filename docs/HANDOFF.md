@@ -5,7 +5,15 @@ _Actualizado: 2026-10-06_
 ## Dónde estamos
 - **Etapa 1 (base): completada e integrada a `main`.** Incluye auth con cookie, roles, superadmin con alta de consultorios e invitaciones (el enlace se copia a mano, sin correo todavía), gestión de recepcionistas y rate limit por IP real (`TRUST_PROXY`). Pasan los 34 tests.
 - **Etapa 2 (agenda): completada e integrada a `main`.** Incluye configuración (datos, horario, servicios), pacientes con teléfono E.164 y consentimiento, agenda de día y semana con citas y bloqueos, exclusion constraint contra cruces, historial de eventos y escrituras condicionadas al estado leído (409 si cambió). Pasan los 88 tests.
-  - **Siguiente paso:** el Plan 3 ya está escrito en `docs/superpowers/plans/2026-10-06-etapa-3-whatsapp.md` (9 tareas). Notas verificadas de la API en `docs/360dialog-notes.md`. Falta revisarlo y ejecutarlo en línea en la rama `etapa-3-whatsapp`.
+- **Etapa 3 (WhatsApp): completada.** Incluye:
+  - Recordatorios de 24 h y 2 h programados con cada cambio de cita.
+  - Cron cada minuto con `SKIP LOCKED` y reintentos.
+  - Cliente de 360dialog, que admite sandbox.
+  - Conexión manual del superadmin, con la key cifrada.
+  - Webhook idempotente con Confirmar, Cancelar y Reprogramar (lista de horarios libres).
+
+  Cómo probarla: ver la sección "Probar WhatsApp" del README.
+  - **Siguiente paso:** escribir el Plan 4 (onboarding de WhatsApp por consultorio y creación automática de plantillas).
 - **Etapas 3 a 7: pendientes.** Ver §10 del spec `docs/superpowers/specs/2026-10-05-recepcionista-wa-design.md`.
 
 ## Cómo levantar
@@ -43,4 +51,4 @@ npm run test:api                        # unit + e2e
 - **Seed:** `seed:superadmin` convierte en superadmin a un OWNER que tenga ese mismo email.
 
 ## Para retomar en una sesión nueva
-> Lee `docs/HANDOFF.md` del repo recepcionista-wa y ejecuta el Plan 3 (`docs/superpowers/plans/2026-10-06-etapa-3-whatsapp.md`) en línea con superpowers:executing-plans en la rama `etapa-3-whatsapp`.
+> Lee `docs/HANDOFF.md` del repo recepcionista-wa y escribe el Plan 4 (Etapa 4: onboarding de WhatsApp por consultorio y plantillas) con superpowers:writing-plans.

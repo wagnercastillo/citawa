@@ -70,3 +70,12 @@ export interface Appointment {
   patient: { id: string; fullName: string; phone: string } | null;
   service: { id: string; name: string; durationMin: number } | null;
 }
+
+export interface WaAccount {
+  phoneNumber: string;
+  displayName: string | null;
+  sandbox: boolean;
+  status: 'PENDING' | 'CONNECTED' | 'ERROR';
+  lastError: string | null;
+  webhookUrl: string;
+}

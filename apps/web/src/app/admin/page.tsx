@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
-import type { ClinicRow } from '@/lib/types';
+import type { ClinicRow, WaAccount } from '@/lib/types';
 import { useMe } from '@/lib/use-me';
 
 function InviteLink({ url }: { url: string }) {
@@ -30,7 +30,72 @@ function InviteLink({ url }: { url: string }) {
   );
 }
 
+function WhatsappPanel({ clinicId }: { clinicId: string }) {
+  const [account, setAccount] = useState<WaAccount | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api<{ account: WaAccount | null }>(`/admin/clinics/${clinicId}/whatsapp`)
+      .then((r) => setAccount(r.account))
+      .catch((e) => setError((e as Error).message));
+  }, [clinicId]);
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formEl = e.currentTarget;
+    const form = new FormData(formEl);
+    setError('');
+    try {
+      setAccount(
+        await api<WaAccount>(`/admin/clinics/${clinicId}/whatsapp`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            apiKey: form.get('apiKey'),
+            phoneNumber: form.get('phoneNumber'),
+            displayName: form.get('displayName') || undefined,
+            sandbox: form.get('sandbox') === 'on',
+          }),
+        }),
+      );
+      formEl.reset();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  const color = account?.status === 'CONNECTED' ? 'text-emerald-700' : account?.status === 'ERROR' ? 'text-red-600' : 'text-amber-700';
+
+  return (
+    <div className="mt-3 space-y-2 rounded border bg-slate-50 p-3 text-sm">
+      {account ? (
+        <div className="space-y-1">
+          <p>
+            WhatsApp {account.phoneNumber} {account.sandbox && '(sandbox)'} · <span className={`font-medium ${color}`}>{account.status}</span>
+          </p>
+          {account.lastError && <p className="text-red-600">{account.lastError}</p>}
+          <p className="break-all text-xs text-slate-500">Webhook: {account.webhookUrl}</p>
+        </div>
+      ) : (
+        <p className="text-slate-500">WhatsApp no conectado.</p>
+      )}
+      <form onSubmit={onSubmit} className="grid gap-2 sm:grid-cols-2">
+        <Input name="apiKey" type="password" placeholder="API key de 360dialog" required minLength={10} autoComplete="off" />
+        <Input name="phoneNumber" placeholder="Número del consultorio" required />
+        <Input name="displayName" placeholder="Nombre visible (opcional)" />
+        <label className="flex items-center gap-2">
+          <input type="checkbox" name="sandbox" /> Sandbox de 360dialog
+        </label>
+        <div className="sm:col-span-2">
+          <Button type="submit" size="sm">{account ? 'Reconectar' : 'Conectar'}</Button>
+        </div>
+      </form>
+      {error && <p className="text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 function ClinicItem({ clinic, onChanged }: { clinic: ClinicRow; onChanged: () => void }) {
+  const [showWa, setShowWa] = useState(false);
   const [paidUntil, setPaidUntil] = useState(clinic.paidUntil ?? '');
   const [inviteUrl, setInviteUrl] = useState('');
   const [error, setError] = useState('');
@@ -75,8 +140,10 @@ function ClinicItem({ clinic, onChanged }: { clinic: ClinicRow; onChanged: () =>
           {clinic.owner?.pending && (
             <Button size="sm" variant="outline" onClick={reinvite}>Nuevo enlace</Button>
           )}
+          <Button size="sm" variant="outline" onClick={() => setShowWa(!showWa)}>WhatsApp</Button>
         </div>
       </div>
+      {showWa && <WhatsappPanel clinicId={clinic.id} />}
       {inviteUrl && <InviteLink url={inviteUrl} />}
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </li>
