@@ -1,22 +1,58 @@
 import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Test, TestingModuleBuilder } from '@nestjs/testing';
 import * as bcrypt from 'bcryptjs';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 import { BusinessHour } from '../src/clinics/business-hour.entity';
 import { Clinic } from '../src/clinics/clinic.entity';
+import { Clock } from '../src/common/clock';
+import { encrypt } from '../src/common/crypto';
+import { D360Client } from '../src/whatsapp/d360-client';
+import { WaAccountStatus, WhatsappAccount } from '../src/whatsapp/whatsapp-account.entity';
+import { FakeClock, FakeD360 } from './fakes';
 import { Patient } from '../src/patients/patient.entity';
 import { Service } from '../src/services/service.entity';
 import { Role } from '../src/users/role.enum';
 import { User } from '../src/users/user.entity';
 
-export async function createTestApp(): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+export async function createTestApp(
+  customize?: (b: TestingModuleBuilder) => TestingModuleBuilder,
+): Promise<INestApplication> {
+  let builder = Test.createTestingModule({ imports: [AppModule] });
+  if (customize) builder = customize(builder);
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication();
   configureApp(app);
   await app.init();
   return app;
+}
+
+export async function createAppWithFakes(
+  nowIso = '2026-10-01T12:00:00Z',
+): Promise<{ app: INestApplication; clock: FakeClock; d360: FakeD360 }> {
+  const clock = new FakeClock(nowIso);
+  const d360 = new FakeD360();
+  const app = await createTestApp((b) => b.overrideProvider(Clock).useValue(clock).overrideProvider(D360Client).useValue(d360));
+  return { app, clock, d360 };
+}
+
+export async function seedWhatsapp(
+  app: INestApplication,
+  clinicId: string,
+  opts: { apiKey?: string; sandbox?: boolean; status?: WaAccountStatus; token?: string; phone?: string } = {},
+): Promise<WhatsappAccount> {
+  const repo = app.get(DataSource).getRepository(WhatsappAccount);
+  return repo.save(
+    repo.create({
+      clinicId,
+      phoneNumber: opts.phone ?? '+51900000000',
+      sandbox: opts.sandbox ?? false,
+      apiKeyEnc: encrypt(opts.apiKey ?? 'key-123'),
+      webhookToken: opts.token ?? `tok-${clinicId}`,
+      status: opts.status ?? WaAccountStatus.CONNECTED,
+    }),
+  );
 }
 
 export async function resetDb(app: INestApplication): Promise<void> {

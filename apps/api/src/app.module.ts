@@ -18,6 +18,7 @@ import { PatientsModule } from './patients/patients.module';
 import { ServicesModule } from './services/services.module';
 import { User } from './users/user.entity';
 import { UsersModule } from './users/users.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { UsersModule } from './users/users.module';
     ServicesModule,
     PatientsModule,
     AppointmentsModule,
+    WhatsappModule,
   ],
   controllers: [HealthController],
   providers: [
