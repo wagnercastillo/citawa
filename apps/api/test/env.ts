@@ -9,3 +9,5 @@ process.env.WEB_URL = 'http://web.test';
 process.env.ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64');
 process.env.PUBLIC_API_URL = 'https://api.test';
 process.env.SCHEDULER_ENABLED = 'false';
+process.env.D360_PARTNER_ID = 'partner-test';
+process.env.D360_PARTNER_API_KEY = 'pk-test';
