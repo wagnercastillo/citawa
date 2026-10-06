@@ -13,6 +13,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { ClinicsModule } from './clinics/clinics.module';
 import { CommonModule } from './common/common.module';
+import { ConversationModule } from './conversation/conversation.module';
 import { dataSourceOptions } from './database/data-source';
 import { HealthController } from './health.controller';
 import { PatientsModule } from './patients/patients.module';
@@ -50,6 +51,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     AppointmentsModule,
     WhatsappModule,
     SchedulerModule,
+    ConversationModule,
   ],
   controllers: [HealthController],
   providers: [
