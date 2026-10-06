@@ -35,4 +35,33 @@ describe('D360Client', () => {
     jest.spyOn(global, 'fetch').mockResolvedValueOnce(ok({ messages: [] }));
     await expect(client.send({ apiKey: 'k', sandbox: false }, {})).rejects.toMatchObject({ retryable: true });
   });
+
+  it('crea y lista plantillas con la key del canal (producción)', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockImplementationOnce(async () => ok({ id: 't1', status: 'submitted' }, 201))
+      .mockImplementationOnce(async () => ok({ waba_templates: [{ name: 'a', status: 'approved' }] }));
+    await client.createTemplate({ apiKey: 'k', sandbox: false }, { name: 'a' });
+    const list = await client.listTemplates({ apiKey: 'k', sandbox: false });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://waba-v2.360dialog.io/v1/configs/templates');
+    expect(fetchMock.mock.calls[0][1]!.method).toBe('POST');
+    expect(fetchMock.mock.calls[1][0]).toBe('https://waba-v2.360dialog.io/v1/configs/templates');
+    expect(fetchMock.mock.calls[1][1]!.method).toBe('GET');
+    expect(list).toEqual([{ name: 'a', status: 'approved' }]);
+  });
+
+  it('genera la key de un canal con la Partner API (x-api-key)', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockImplementationOnce(async () => ok({ id: 'x', api_key: 'chan-key', address: '+51987654321' }, 201));
+    const res = await client.createChannelApiKey({ partnerId: 'P1', apiKey: 'pk' }, 'ch_9');
+    expect(res).toEqual({ apiKey: 'chan-key', address: '+51987654321' });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://hub.360dialog.io/api/v2/partners/P1/channels/ch_9/api_keys');
+    expect((init!.headers as Record<string, string>)['x-api-key']).toBe('pk');
+    expect((init!.headers as Record<string, string>)['D360-API-KEY']).toBeUndefined();
+  });
+
+  it('Partner API sin api_key en la respuesta es error', async () => {
+    jest.spyOn(global, 'fetch').mockImplementationOnce(async () => ok({}, 201));
+    await expect(client.createChannelApiKey({ partnerId: 'P1', apiKey: 'pk' }, 'c')).rejects.toBeInstanceOf(D360Error);
+  });
 });
