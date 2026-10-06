@@ -1,4 +1,4 @@
-import { addDays, DATE_RE, daysBetween, TIME_RE, zonedToUtc } from './zoned-time';
+import { addDays, DATE_RE, daysBetween, localParts, TIME_RE, zonedToUtc } from './zoned-time';
 
 describe('zoned-time', () => {
   it('convierte hora de pared de Lima (UTC-5) a UTC', () => {
@@ -35,5 +35,14 @@ describe('zoned-time', () => {
     expect(TIME_RE.test('09:30')).toBe(true);
     expect(TIME_RE.test('9:30')).toBe(false);
     expect(TIME_RE.test('24:00')).toBe(false);
+  });
+});
+
+describe('localParts', () => {
+  it('04:30Z del 7 de octubre es el 6 a las 23:30 en Lima (martes)', () => {
+    expect(localParts(new Date('2026-10-07T04:30:00Z'), 'America/Lima')).toEqual({ date: '2026-10-06', time: '23:30', weekday: 2 });
+  });
+  it('medianoche local', () => {
+    expect(localParts(new Date('2026-10-06T05:00:00Z'), 'America/Lima')).toEqual({ date: '2026-10-06', time: '00:00', weekday: 2 });
   });
 });

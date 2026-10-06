@@ -34,3 +34,20 @@ export function addDays(date: string, days: number): string {
 export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
+
+/** Fecha (YYYY-MM-DD), hora (HH:MM) y día de la semana (0 = domingo) del instante en la zona dada. */
+export function localParts(instant: Date, timeZone: string): { date: string; time: string; weekday: number } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(instant);
+  const get = (type: Intl.DateTimeFormatPartTypes): string => parts.find((p) => p.type === type)!.value;
+  const date = `${get('year')}-${get('month')}-${get('day')}`;
+  const [y, m, d] = date.split('-').map(Number);
+  return { date, time: `${get('hour')}:${get('minute')}`, weekday: new Date(Date.UTC(y, m - 1, d)).getUTCDay() };
+}
