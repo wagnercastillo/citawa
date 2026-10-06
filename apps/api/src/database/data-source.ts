@@ -15,14 +15,17 @@ import { Messaging1759900000000 } from './migrations/1759900000000-Messaging';
 import { ScheduledMessage } from '../scheduler/scheduled-message.entity';
 import { Message } from '../whatsapp/message.entity';
 import { WhatsappAccount } from '../whatsapp/whatsapp-account.entity';
+import { WhatsappTemplate } from '../whatsapp/whatsapp-template.entity';
+import { OnboardingState } from '../whatsapp/onboarding-state.entity';
+import { Onboarding1760000000000 } from './migrations/1760000000000-Onboarding';
 
 config({ path: resolve(__dirname, '../../../../.env') });
 
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
   url: process.env.DATABASE_URL,
-  entities: [Clinic, User, BusinessHour, Service, Patient, Appointment, AppointmentEvent, WhatsappAccount, ScheduledMessage, Message],
-  migrations: [Init1759700000000, Agenda1759800000000, Messaging1759900000000],
+  entities: [Clinic, User, BusinessHour, Service, Patient, Appointment, AppointmentEvent, WhatsappAccount, ScheduledMessage, Message, WhatsappTemplate, OnboardingState],
+  migrations: [Init1759700000000, Agenda1759800000000, Messaging1759900000000, Onboarding1760000000000],
   synchronize: false,
 };
 
