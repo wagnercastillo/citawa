@@ -11,6 +11,7 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { ClinicsModule } from './clinics/clinics.module';
+import { CommonModule } from './common/common.module';
 import { dataSourceOptions } from './database/data-source';
 import { HealthController } from './health.controller';
 import { PatientsModule } from './patients/patients.module';
@@ -20,6 +21,7 @@ import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
+    CommonModule,
     ConfigModule.forRoot({ isGlobal: true, envFilePath: resolve(__dirname, '../../../.env') }),
     TypeOrmModule.forRoot(dataSourceOptions),
     TypeOrmModule.forFeature([User]),
