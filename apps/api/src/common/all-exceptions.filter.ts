@@ -18,6 +18,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
+    if (exception instanceof QueryFailedError && (exception as QueryFailedError & { code?: string }).code === '23P01') {
+      res.status(409).json({ statusCode: 409, message: 'Horario ocupado: ya hay otra cita en ese horario', error: 'CONFLICT' });
+      return;
+    }
+
     if (exception instanceof QueryFailedError && (exception as QueryFailedError & { code?: string }).code === '23505') {
       res.status(409).json({ statusCode: 409, message: 'Ya existe un registro con esos datos', error: 'CONFLICT' });
       return;

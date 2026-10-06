@@ -6,6 +6,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { resolve } from 'path';
 import { AdminModule } from './admin/admin.module';
+import { AppointmentsModule } from './appointments/appointments.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
@@ -40,6 +41,7 @@ import { UsersModule } from './users/users.module';
     ClinicsModule,
     ServicesModule,
     PatientsModule,
+    AppointmentsModule,
   ],
   controllers: [HealthController],
   providers: [
