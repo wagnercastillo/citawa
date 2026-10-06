@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Between, DataSource, EntityManager } from 'typeorm';
 import { AuthUser } from '../auth/session';
@@ -32,6 +32,7 @@ const toDto = (a: Appointment): AppointmentDto => ({
 });
 
 const MAX_RANGE_DAYS = 31;
+const STALE_MSG = 'La cita cambió mientras la editabas; recarga la agenda e inténtalo de nuevo';
 
 @Injectable()
 export class AppointmentsService {
@@ -54,7 +55,8 @@ export class AppointmentsService {
       relations: { patient: true, service: true },
       order: { startsAt: 'ASC' },
     });
-    return rows.map(toDto);
+    // Un bloqueo quitado no aporta nada en la agenda; las citas canceladas sí se muestran (tachadas).
+    return rows.filter((a) => !(a.isBlock && a.status === AppointmentStatus.CANCELLED)).map(toDto);
   }
 
   async forPatient(clinicId: string, patientId: string): Promise<AppointmentDto[]> {
@@ -125,13 +127,14 @@ export class AppointmentsService {
     const before = { startsAt: appt.startsAt.toISOString(), serviceId: appt.serviceId };
 
     await this.ds.transaction(async (m) => {
-      await m.update(Appointment, { id }, {
+      const result = await m.update(Appointment, { id, clinicId, status: appt.status }, {
         startsAt,
         endsAt,
         serviceId: service.id,
         status: moved ? AppointmentStatus.SCHEDULED : appt.status,
         calendarDirty: true,
       });
+      if (!result.affected) throw new ConflictException(STALE_MSG);
       await this.logEvent(m, appt, user, moved ? AppointmentEventType.RESCHEDULED : AppointmentEventType.UPDATED, {
         from: before,
         to: { startsAt: startsAt.toISOString(), serviceId: service.id },
@@ -148,7 +151,9 @@ export class AppointmentsService {
       throw new BadRequestException(`No se puede pasar de ${appt.status} a ${to}`);
     }
     await this.ds.transaction(async (m) => {
-      await m.update(Appointment, { id }, { status: to, calendarDirty: true });
+      // Condicionado al estado leído: si otro usuario (o el webhook) lo cambió entretanto, no se pisa.
+      const result = await m.update(Appointment, { id, clinicId, status: appt.status }, { status: to, calendarDirty: true });
+      if (!result.affected) throw new ConflictException(STALE_MSG);
       await this.logEvent(m, appt, user, to as unknown as AppointmentEventType, { from: appt.status });
     });
     return this.getDto(clinicId, id);
