@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { resolve } from 'path';
 import { AdminModule } from './admin/admin.module';
@@ -15,6 +16,7 @@ import { CommonModule } from './common/common.module';
 import { dataSourceOptions } from './database/data-source';
 import { HealthController } from './health.controller';
 import { PatientsModule } from './patients/patients.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 import { ServicesModule } from './services/services.module';
 import { User } from './users/user.entity';
 import { UsersModule } from './users/users.module';
@@ -23,6 +25,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
 @Module({
   imports: [
     CommonModule,
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({ isGlobal: true, envFilePath: resolve(__dirname, '../../../.env') }),
     TypeOrmModule.forRoot(dataSourceOptions),
     TypeOrmModule.forFeature([User]),
@@ -46,6 +49,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     PatientsModule,
     AppointmentsModule,
     WhatsappModule,
+    SchedulerModule,
   ],
   controllers: [HealthController],
   providers: [
