@@ -5,6 +5,8 @@ import { AuthUser } from '../auth/session';
 import { ClinicSettingsService } from '../clinics/clinic-settings.service';
 import { addDays, daysBetween, zonedToUtc } from '../common/zoned-time';
 import { PatientsService } from '../patients/patients.service';
+import { ReminderScheduler } from '../scheduler/reminder-scheduler';
+import { Service } from '../services/service.entity';
 import { ServicesService } from '../services/services.service';
 import { AppointmentEvent, AppointmentEventType, EventSource } from './appointment-event.entity';
 import { canTransition } from './appointment-status';
@@ -21,6 +23,15 @@ export interface AppointmentDto {
   service: { id: string; name: string; durationMin: number } | null;
 }
 
+/** Quién hace el cambio: un usuario del panel o el paciente por WhatsApp. */
+export interface Actor {
+  userId: string | null;
+  source: EventSource;
+}
+
+export const panelActor = (user: AuthUser): Actor => ({ userId: user.id, source: EventSource.PANEL });
+export const WHATSAPP_ACTOR: Actor = { userId: null, source: EventSource.WHATSAPP };
+
 const toDto = (a: Appointment): AppointmentDto => ({
   id: a.id,
   startsAt: a.startsAt.toISOString(),
@@ -33,6 +44,7 @@ const toDto = (a: Appointment): AppointmentDto => ({
 
 const MAX_RANGE_DAYS = 31;
 const STALE_MSG = 'La cita cambió mientras la editabas; recarga la agenda e inténtalo de nuevo';
+const ACTIVE = [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED];
 
 @Injectable()
 export class AppointmentsService {
@@ -41,6 +53,7 @@ export class AppointmentsService {
     private readonly settings: ClinicSettingsService,
     private readonly services: ServicesService,
     private readonly patients: PatientsService,
+    private readonly reminders: ReminderScheduler,
   ) {}
 
   async list(clinicId: string, from: string, to: string): Promise<AppointmentDto[]> {
@@ -70,6 +83,10 @@ export class AppointmentsService {
     return rows.map(toDto);
   }
 
+  findWithRelations(clinicId: string, id: string): Promise<Appointment | null> {
+    return this.ds.getRepository(Appointment).findOne({ where: { id, clinicId }, relations: { patient: true, service: true } });
+  }
+
   async create(user: AuthUser, dto: CreateAppointmentDto): Promise<AppointmentDto> {
     const clinicId = user.clinicId!;
     await this.patients.findInClinic(clinicId, dto.patientId);
@@ -83,7 +100,8 @@ export class AppointmentsService {
           clinicId, patientId: dto.patientId, serviceId: service.id, startsAt, endsAt, createdBy: user.id, calendarDirty: true,
         }),
       );
-      await this.logEvent(m, appt, user, AppointmentEventType.CREATED);
+      await this.logEvent(m, appt, panelActor(user), AppointmentEventType.CREATED);
+      await this.reminders.sync(m, appt.id);
       return appt.id;
     });
     return this.getDto(clinicId, id);
@@ -106,7 +124,7 @@ export class AppointmentsService {
           calendarDirty: true,
         }),
       );
-      await this.logEvent(m, appt, user, AppointmentEventType.CREATED, { block: true });
+      await this.logEvent(m, appt, panelActor(user), AppointmentEventType.CREATED, { block: true });
       return appt.id;
     });
     return this.getDto(clinicId, id);
@@ -114,39 +132,26 @@ export class AppointmentsService {
 
   async update(user: AuthUser, id: string, dto: UpdateAppointmentDto): Promise<AppointmentDto> {
     const clinicId = user.clinicId!;
-    const appt = await this.findInClinic(clinicId, id);
-    if (appt.isBlock) throw new BadRequestException('Los bloqueos no se editan; elimínalo y crea otro');
-    if (appt.status !== AppointmentStatus.SCHEDULED && appt.status !== AppointmentStatus.CONFIRMED) {
-      throw new BadRequestException('Solo se pueden editar citas programadas o confirmadas');
-    }
+    const appt = await this.findEditable(clinicId, id);
     const service = await this.services.findInClinic(clinicId, dto.serviceId);
     if (!service.active && service.id !== appt.serviceId) throw new BadRequestException('El servicio está desactivado');
     const startsAt = zonedToUtc(dto.date, dto.time, await this.settings.getTimezone(clinicId));
-    const endsAt = new Date(startsAt.getTime() + service.durationMin * 60_000);
-    const moved = startsAt.getTime() !== appt.startsAt.getTime();
-    const before = { startsAt: appt.startsAt.toISOString(), serviceId: appt.serviceId };
-
-    await this.ds.transaction(async (m) => {
-      const result = await m.update(Appointment, { id, clinicId, status: appt.status }, {
-        startsAt,
-        endsAt,
-        serviceId: service.id,
-        status: moved ? AppointmentStatus.SCHEDULED : appt.status,
-        calendarDirty: true,
-      });
-      if (!result.affected) throw new ConflictException(STALE_MSG);
-      await this.logEvent(m, appt, user, moved ? AppointmentEventType.RESCHEDULED : AppointmentEventType.UPDATED, {
-        from: before,
-        to: { startsAt: startsAt.toISOString(), serviceId: service.id },
-      });
-    });
-    return this.getDto(clinicId, id);
+    return this.applyMove(clinicId, panelActor(user), appt, startsAt, service);
   }
 
-  async setStatus(user: AuthUser, id: string, dto: SetStatusDto): Promise<AppointmentDto> {
-    const clinicId = user.clinicId!;
+  /** Mueve la cita a `startsAt` manteniendo su servicio (usado por la reprogramación por WhatsApp). */
+  async reschedule(clinicId: string, actor: Actor, id: string, startsAt: Date): Promise<AppointmentDto> {
+    const appt = await this.findEditable(clinicId, id);
+    const service = await this.services.findInClinic(clinicId, appt.serviceId!);
+    return this.applyMove(clinicId, actor, appt, startsAt, service);
+  }
+
+  setStatus(user: AuthUser, id: string, dto: SetStatusDto): Promise<AppointmentDto> {
+    return this.changeStatus(user.clinicId!, panelActor(user), id, dto.status as AppointmentStatus);
+  }
+
+  async changeStatus(clinicId: string, actor: Actor, id: string, to: AppointmentStatus): Promise<AppointmentDto> {
     const appt = await this.findInClinic(clinicId, id);
-    const to = dto.status as AppointmentStatus;
     if (!canTransition(appt.status, to, appt.isBlock)) {
       throw new BadRequestException(`No se puede pasar de ${appt.status} a ${to}`);
     }
@@ -154,9 +159,39 @@ export class AppointmentsService {
       // Condicionado al estado leído: si otro usuario (o el webhook) lo cambió entretanto, no se pisa.
       const result = await m.update(Appointment, { id, clinicId, status: appt.status }, { status: to, calendarDirty: true });
       if (!result.affected) throw new ConflictException(STALE_MSG);
-      await this.logEvent(m, appt, user, to as unknown as AppointmentEventType, { from: appt.status });
+      await this.logEvent(m, appt, actor, to as unknown as AppointmentEventType, { from: appt.status });
+      await this.reminders.sync(m, id);
     });
     return this.getDto(clinicId, id);
+  }
+
+  private async applyMove(clinicId: string, actor: Actor, appt: Appointment, startsAt: Date, service: Service): Promise<AppointmentDto> {
+    const endsAt = new Date(startsAt.getTime() + service.durationMin * 60_000);
+    const moved = startsAt.getTime() !== appt.startsAt.getTime();
+    const before = { startsAt: appt.startsAt.toISOString(), serviceId: appt.serviceId };
+    await this.ds.transaction(async (m) => {
+      const result = await m.update(Appointment, { id: appt.id, clinicId, status: appt.status }, {
+        startsAt,
+        endsAt,
+        serviceId: service.id,
+        status: moved ? AppointmentStatus.SCHEDULED : appt.status,
+        calendarDirty: true,
+      });
+      if (!result.affected) throw new ConflictException(STALE_MSG);
+      await this.logEvent(m, appt, actor, moved ? AppointmentEventType.RESCHEDULED : AppointmentEventType.UPDATED, {
+        from: before,
+        to: { startsAt: startsAt.toISOString(), serviceId: service.id },
+      });
+      await this.reminders.sync(m, appt.id);
+    });
+    return this.getDto(clinicId, appt.id);
+  }
+
+  private async findEditable(clinicId: string, id: string): Promise<Appointment> {
+    const appt = await this.findInClinic(clinicId, id);
+    if (appt.isBlock) throw new BadRequestException('Los bloqueos no se editan; elimínalo y crea otro');
+    if (!ACTIVE.includes(appt.status)) throw new BadRequestException('Solo se pueden editar citas programadas o confirmadas');
+    return appt;
   }
 
   private async findInClinic(clinicId: string, id: string): Promise<Appointment> {
@@ -176,13 +211,13 @@ export class AppointmentsService {
   private async logEvent(
     m: EntityManager,
     appt: Appointment,
-    user: AuthUser,
+    actor: Actor,
     type: AppointmentEventType,
     data: Record<string, unknown> = {},
   ): Promise<void> {
     await m.save(
       m.create(AppointmentEvent, {
-        appointmentId: appt.id, clinicId: appt.clinicId, type, source: EventSource.PANEL, actorUserId: user.id, data,
+        appointmentId: appt.id, clinicId: appt.clinicId, type, source: actor.source, actorUserId: actor.userId, data,
       }),
     );
   }
