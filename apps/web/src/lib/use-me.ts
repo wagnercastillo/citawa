@@ -21,3 +21,13 @@ export function useMe(): Me | null {
   }, [router]);
   return me;
 }
+
+/** Para páginas del consultorio: redirige al superadmin a /admin. */
+export function useClinicMe(): Me | null {
+  const me = useMe();
+  const router = useRouter();
+  useEffect(() => {
+    if (me?.role === 'SUPERADMIN') router.replace('/admin');
+  }, [me, router]);
+  return me && me.clinic ? me : null;
+}

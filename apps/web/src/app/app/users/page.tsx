@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { AppHeader } from '@/components/app-header';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -56,10 +56,8 @@ export default function UsersPage() {
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Usuarios</h1>
-        <Link href="/app" className="text-sm underline">Volver</Link>
-      </header>
+      <AppHeader me={me} />
+      <h1 className="text-xl font-bold">Usuarios</h1>
 
       <Card>
         <CardHeader>
