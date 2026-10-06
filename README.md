@@ -7,7 +7,7 @@ Recordatorios de citas por WhatsApp para consultorios pequeños. Spec: `docs/sup
 ```bash
 cp .env.example .env          # editar JWT_SECRET y SUPERADMIN_*
 npm install
-npm run db:up                 # PostgreSQL en localhost:5433
+npm run db:up                 # PostgreSQL en localhost:5434
 npm run migration:run -w apps/api
 npm run seed:superadmin -w apps/api
 npm run dev                   # API :4000 + panel :3000
