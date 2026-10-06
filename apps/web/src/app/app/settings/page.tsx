@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { WEEKDAYS } from '@/lib/format';
-import type { BusinessHour, ClinicSettings, Service } from '@/lib/types';
+import type { BusinessHour, ClinicSettings, Service, WaStatus } from '@/lib/types';
 import { useClinicMe } from '@/lib/use-me';
 
 function ClinicDataCard({ settings, onSaved }: { settings: ClinicSettings; onSaved: (s: ClinicSettings) => void }) {
@@ -191,6 +191,92 @@ function ServicesCard() {
   );
 }
 
+const TEMPLATE_LABEL: Record<string, string> = {
+  recordatorio_cita_24h: 'Recordatorio 24 h',
+  recordatorio_cita_2h: 'Recordatorio 2 h',
+  recordatorio_pago: 'Recordatorio de pago',
+};
+const TEMPLATE_STATUS: Record<string, string> = {
+  PENDING: 'En revisión',
+  APPROVED: 'Aprobada',
+  REJECTED: 'Rechazada',
+  PAUSED: 'Pausada',
+  DISABLED: 'Deshabilitada',
+};
+
+function WhatsappCard() {
+  const [status, setStatus] = useState<WaStatus | null>(null);
+  const [error, setError] = useState('');
+
+  const load = useCallback(() => {
+    api<WaStatus>('/whatsapp').then(setStatus).catch((e) => setError((e as Error).message));
+  }, []);
+
+  useEffect(() => {
+    load();
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin === window.location.origin && e.data?.type === 'wa-connected') load();
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [load]);
+
+  async function connect() {
+    setError('');
+    try {
+      const { url } = await api<{ url: string }>('/whatsapp/onboarding/start', { method: 'POST' });
+      const popup = window.open(url, 'd360-onboarding', 'width=600,height=800');
+      if (!popup) window.location.href = url;
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  const ready = !!status?.account && status.account.status === 'CONNECTED' &&
+    status.templates.length > 0 && status.templates.every((t) => t.status === 'APPROVED' || t.name === 'recordatorio_pago');
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">WhatsApp</CardTitle></CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {status?.account ? (
+          <div className="space-y-1">
+            <p>
+              Número {status.account.phoneNumber} ·{' '}
+              <span className={status.account.status === 'CONNECTED' ? 'text-emerald-700' : 'text-red-600'}>
+                {status.account.status === 'CONNECTED' ? 'Conectado' : status.account.status === 'ERROR' ? 'Con error' : 'Conectando'}
+              </span>
+            </p>
+            {status.account.lastError && <p className="text-red-600">{status.account.lastError}</p>}
+            {ready && <p className="font-medium text-emerald-700">✅ Listo para enviar recordatorios</p>}
+          </div>
+        ) : (
+          <p className="text-slate-500">Todavía no conectaste el WhatsApp del consultorio.</p>
+        )}
+        {!!status?.templates.length && (
+          <ul className="divide-y rounded border">
+            {status.templates.map((t) => (
+              <li key={t.name} className="flex flex-wrap justify-between gap-2 p-2">
+                <span>{TEMPLATE_LABEL[t.name] ?? t.name}</span>
+                <span className={t.status === 'APPROVED' ? 'text-emerald-700' : t.status === 'PENDING' ? 'text-amber-700' : 'text-red-600'}>
+                  {TEMPLATE_STATUS[t.status]}
+                  {t.rejectionReason && ` · ${t.rejectionReason}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-slate-500">
+          Si usas este número en la app WhatsApp Business, en la ventana de conexión elige “Yes, this number is connected to the
+          WhatsApp Business App” para seguir usándola.
+        </p>
+        <Button type="button" onClick={connect}>{status?.account ? 'Reconectar WhatsApp' : 'Conectar WhatsApp'}</Button>
+        {error && <p className="text-red-600">{error}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const me = useClinicMe();
   const router = useRouter();
@@ -209,6 +295,7 @@ export default function SettingsPage() {
       <AppHeader me={me} />
       <h1 className="text-xl font-bold">Configuración</h1>
       <ClinicDataCard settings={settings} onSaved={setSettings} />
+      <WhatsappCard />
       <HoursCard />
       <ServicesCard />
     </main>

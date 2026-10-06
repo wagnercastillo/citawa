@@ -79,3 +79,14 @@ export interface WaAccount {
   lastError: string | null;
   webhookUrl: string;
 }
+
+export interface WaTemplate {
+  name: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAUSED' | 'DISABLED';
+  rejectionReason: string | null;
+}
+
+export interface WaStatus {
+  account: WaAccount | null;
+  templates: WaTemplate[];
+}

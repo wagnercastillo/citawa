@@ -13,8 +13,10 @@ _Actualizado: 2026-10-06_
   - Webhook idempotente con Confirmar, Cancelar y Reprogramar (lista de horarios libres).
 
   Cómo probarla: ver la sección "Probar WhatsApp" del README.
-  - **Siguiente paso:** el Plan 4 ya está escrito en `docs/superpowers/plans/2026-10-06-etapa-4-onboarding.md` (7 tareas). Notas de la Partner API en `docs/360dialog-notes.md`. Falta ejecutarlo en línea en la rama `etapa-4-onboarding`.
-- **Etapas 3 a 7: pendientes.** Ver §10 del spec `docs/superpowers/specs/2026-10-05-recepcionista-wa-design.md`.
+  - **Siguiente paso:** ver Etapa 4.
+- **Etapa 4 (onboarding): completada.** El dueño conecta su número con el popup de 360dialog, las plantillas se crean solas, un poller las sigue cada 15 min y el despachador solo envía con plantillas aprobadas.
+  - **Siguiente paso:** Plan 5 (cobros y recordatorio de pago).
+- **Etapas 5 a 7: pendientes.** Ver §10 del spec `docs/superpowers/specs/2026-10-05-recepcionista-wa-design.md`.
 
 ## Cómo levantar
 ```bash
@@ -51,4 +53,4 @@ npm run test:api                        # unit + e2e
 - **Seed:** `seed:superadmin` convierte en superadmin a un OWNER que tenga ese mismo email.
 
 ## Para retomar en una sesión nueva
-> Lee `docs/HANDOFF.md` del repo recepcionista-wa y ejecuta el Plan 4 (`docs/superpowers/plans/2026-10-06-etapa-4-onboarding.md`) en línea con superpowers:executing-plans en la rama `etapa-4-onboarding`.
+> Lee `docs/HANDOFF.md` del repo recepcionista-wa y escribe el Plan 5 (Etapa 5: cobros y recordatorio de pago) con superpowers:writing-plans.

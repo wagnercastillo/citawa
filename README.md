@@ -35,6 +35,17 @@ npm run test:api              # unit + e2e (usa la base recepcionista_test)
      UPDATE scheduled_messages SET send_at = now() WHERE kind = 'REMINDER_24H';
      ```
      En menos de un minuto llega la plantilla de prueba con los botones Confirm/Cancel; al tocarlos, la agenda cambia.
-3. **Producción:** antes de conectar el número real, crear en el panel de 360dialog (categoría UTILITY, idioma es) estas plantillas:
+3. **Producción (conexión manual del superadmin):** desde la Etapa 4 las plantillas se crean solas al conectar. Como referencia, son estas (en el panel de 360dialog (categoría UTILITY, idioma es) estas plantillas:
    - `recordatorio_cita_24h`: "Hola {{1}}, te recordamos tu cita en {{2}} el {{3}} a las {{4}}." con 3 botones de respuesta rápida: Confirmo, Reprogramar, Cancelar.
    - `recordatorio_cita_2h`: "{{1}}, te esperamos hoy a las {{2}} en {{3}}." con 1 botón: Cancelar.
+
+## Conectar WhatsApp por consultorio (Etapa 4)
+
+1. **Credenciales del partner:** en el Partner Hub de 360dialog, obtener el Partner ID y generar una API key (sección API Keys). Ponerlos en `.env`:
+   - `D360_PARTNER_ID=…`
+   - `D360_PARTNER_API_KEY=…`
+
+   Elegir **Partner Payment** (tú pagas 360dialog y Meta).
+2. **Redirect URL:** en el Partner Hub, configurar como redirect URL `${WEB_URL}/app/settings/whatsapp/callback`.
+3. **Conectar:** el dueño entra a **Configuración → WhatsApp → Conectar WhatsApp**, completa el popup y vuelve. Las 3 plantillas se crean solas y su estado se actualiza cada 15 min. Cuando están aprobadas, aparece "Listo para enviar".
+4. **Si falla la key del canal:** si 360dialog responde que el canal no está listo ("not running"), esperar unos minutos y reconectar.
