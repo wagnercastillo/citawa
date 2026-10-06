@@ -5,7 +5,7 @@ _Actualizado: 2026-10-06_
 ## Dónde estamos
 - **Etapa 1 (base): completada e integrada a `main`.** Incluye auth con cookie, roles, superadmin con alta de consultorios e invitaciones (el enlace se copia a mano, sin correo todavía), gestión de recepcionistas y rate limit por IP real (`TRUST_PROXY`). Pasan los 34 tests.
 - **Etapa 2 (agenda): completada e integrada a `main`.** Incluye configuración (datos, horario, servicios), pacientes con teléfono E.164 y consentimiento, agenda de día y semana con citas y bloqueos, exclusion constraint contra cruces, historial de eventos y escrituras condicionadas al estado leído (409 si cambió). Pasan los 88 tests.
-  - **Siguiente paso:** escribir el Plan 3 (scheduler + 360dialog sandbox + webhook + conversación).
+  - **Siguiente paso:** el Plan 3 ya está escrito en `docs/superpowers/plans/2026-10-06-etapa-3-whatsapp.md` (9 tareas). Notas verificadas de la API en `docs/360dialog-notes.md`. Falta revisarlo y ejecutarlo en línea en la rama `etapa-3-whatsapp`.
 - **Etapas 3 a 7: pendientes.** Ver §10 del spec `docs/superpowers/specs/2026-10-05-recepcionista-wa-design.md`.
 
 ## Cómo levantar
@@ -43,4 +43,4 @@ npm run test:api                        # unit + e2e
 - **Seed:** `seed:superadmin` convierte en superadmin a un OWNER que tenga ese mismo email.
 
 ## Para retomar en una sesión nueva
-> Lee `docs/HANDOFF.md` del repo recepcionista-wa y escribe el Plan 3 (Etapa 3: scheduler, 360dialog en sandbox, webhook y conversación) con superpowers:writing-plans.
+> Lee `docs/HANDOFF.md` del repo recepcionista-wa y ejecuta el Plan 3 (`docs/superpowers/plans/2026-10-06-etapa-3-whatsapp.md`) en línea con superpowers:executing-plans en la rama `etapa-3-whatsapp`.
