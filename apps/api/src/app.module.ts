@@ -9,6 +9,7 @@ import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
+import { ClinicsModule } from './clinics/clinics.module';
 import { dataSourceOptions } from './database/data-source';
 import { HealthController } from './health.controller';
 import { User } from './users/user.entity';
@@ -34,6 +35,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     AdminModule,
     UsersModule,
+    ClinicsModule,
   ],
   controllers: [HealthController],
   providers: [
