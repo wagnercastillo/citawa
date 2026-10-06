@@ -26,6 +26,11 @@ export class FakeD360 {
   webhooks: { creds: D360Credentials; url: string }[] = [];
   sendErrors: D360Error[] = [];
   webhookError: Error | null = null;
+  templatesCreated: { creds: D360Credentials; payload: AnyPayload }[] = [];
+  templateList: { name: string; status: string; rejected_reason?: string | null }[] = [];
+  channelKeys: { partner: { partnerId: string; apiKey: string }; channelId: string }[] = [];
+  partnerError: Error | null = null;
+  templateCreateError: Error | null = null;
   private seq = 0;
 
   async send(creds: D360Credentials, payload: AnyPayload): Promise<{ waMessageId: string }> {
@@ -41,10 +46,31 @@ export class FakeD360 {
     this.webhooks.push({ creds, url });
   }
 
+  async createTemplate(creds: D360Credentials, payload: AnyPayload): Promise<void> {
+    if (this.templateCreateError) throw this.templateCreateError;
+    this.templatesCreated.push({ creds, payload });
+    if (!this.templateList.some((t) => t.name === payload.name)) this.templateList.push({ name: payload.name, status: 'submitted' });
+  }
+
+  async listTemplates(): Promise<{ name: string; status: string; rejected_reason?: string | null }[]> {
+    return this.templateList;
+  }
+
+  async createChannelApiKey(partner: { partnerId: string; apiKey: string }, channelId: string): Promise<{ apiKey: string; address: string }> {
+    if (this.partnerError) throw this.partnerError;
+    this.channelKeys.push({ partner, channelId });
+    return { apiKey: `key-${channelId}`, address: '51987654321' };
+  }
+
   reset(): void {
     this.sent = [];
     this.webhooks = [];
     this.sendErrors = [];
     this.webhookError = null;
+    this.templatesCreated = [];
+    this.templateList = [];
+    this.channelKeys = [];
+    this.partnerError = null;
+    this.templateCreateError = null;
   }
 }

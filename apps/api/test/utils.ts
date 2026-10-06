@@ -40,10 +40,10 @@ export async function createAppWithFakes(
 export async function seedWhatsapp(
   app: INestApplication,
   clinicId: string,
-  opts: { apiKey?: string; sandbox?: boolean; status?: WaAccountStatus; token?: string; phone?: string } = {},
+  opts: { apiKey?: string; sandbox?: boolean; status?: WaAccountStatus; token?: string; phone?: string; templates?: boolean } = {},
 ): Promise<WhatsappAccount> {
   const repo = app.get(DataSource).getRepository(WhatsappAccount);
-  return repo.save(
+  const account = await repo.save(
     repo.create({
       clinicId,
       phoneNumber: opts.phone ?? '+51900000000',
@@ -53,6 +53,13 @@ export async function seedWhatsapp(
       status: opts.status ?? WaAccountStatus.CONNECTED,
     }),
   );
+  if (opts.templates ?? !account.sandbox) {
+    await app.get(DataSource).query(
+      `INSERT INTO whatsapp_templates (clinic_id, name, status) VALUES ($1,'recordatorio_cita_24h','APPROVED'),($1,'recordatorio_cita_2h','APPROVED'),($1,'recordatorio_pago','APPROVED')`,
+      [clinicId],
+    );
+  }
+  return account;
 }
 
 export async function resetDb(app: INestApplication): Promise<void> {
