@@ -12,6 +12,7 @@ import { RolesGuard } from './auth/roles.guard';
 import { ClinicsModule } from './clinics/clinics.module';
 import { dataSourceOptions } from './database/data-source';
 import { HealthController } from './health.controller';
+import { PatientsModule } from './patients/patients.module';
 import { ServicesModule } from './services/services.module';
 import { User } from './users/user.entity';
 import { UsersModule } from './users/users.module';
@@ -38,6 +39,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     ClinicsModule,
     ServicesModule,
+    PatientsModule,
   ],
   controllers: [HealthController],
   providers: [
