@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, LessThan, MoreThan, Not } from 'typeorm';
+import { DataSource, LessThan, MoreThan, Not, QueryFailedError } from 'typeorm';
 import { canTransition } from '../appointments/appointment-status';
 import { Appointment, AppointmentStatus } from '../appointments/appointment.entity';
 import { AppointmentsService, WHATSAPP_ACTOR } from '../appointments/appointments.service';
@@ -46,8 +46,17 @@ export class ConversationService {
       payload: { text: msg.text, payload: msg.payload },
     });
     if (!isNew || !msg.payload || !patient) return;
+    try {
+      await this.act(account, patient, msg.payload);
+    } catch (e) {
+      // Se borra el registro para que el reintento de 360dialog (tras nuestro 500) vuelva a procesarlo.
+      await this.ds.query(`DELETE FROM messages WHERE wa_message_id = $1 AND direction = 'IN'`, [msg.waId]);
+      throw e;
+    }
+  }
 
-    const match = PAYLOAD_RE.exec(msg.payload);
+  private async act(account: WhatsappAccount, patient: Patient, payload: string): Promise<void> {
+    const match = PAYLOAD_RE.exec(payload);
     if (!match) return;
     const [, action, apptId, iso] = match;
     const appt = await this.appointments.findWithRelations(account.clinicId, apptId);
@@ -79,7 +88,8 @@ export class ConversationService {
       const moved = await this.appointments.reschedule(account.clinicId, WHATSAPP_ACTOR, appt.id, new Date(iso));
       return send(textMessage(patient.phoneE164, `📅 Listo, tu cita quedó para el ${this.when(new Date(moved.startsAt), clinic)}.`));
     } catch (e) {
-      if (e instanceof ConflictException) {
+      const slotTaken = e instanceof QueryFailedError && (e as QueryFailedError & { code?: string }).code === '23P01';
+      if (e instanceof ConflictException || slotTaken) {
         return this.offerSlots(account, patient, appt, clinic, 'Ese horario se acaba de ocupar. Elige otro:');
       }
       throw e;

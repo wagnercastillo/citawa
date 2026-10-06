@@ -75,7 +75,7 @@ describe('despachador de recordatorios', () => {
     expect(sent2h!.payload.template.components[0].parameters.map((p: { text: string }) => p.text)).toEqual(['Juan', '09:30', 'Av. Larco 123']);
   });
 
-  it('cancela con motivo: sin consentimiento, suscripción suspendida, WhatsApp desconectado', async () => {
+  it('cancela con motivo (sin consentimiento, suscripción suspendida); WhatsApp desconectado pospone', async () => {
     clock.set('2026-10-01T14:31:00Z');
     await ds.query(`UPDATE patients SET whatsapp_opt_in = false WHERE id = $1`, [patientId]);
     await dispatcher.runOnce();
@@ -91,7 +91,7 @@ describe('despachador de recordatorios', () => {
     await ds.query(`UPDATE whatsapp_accounts SET status = 'ERROR' WHERE clinic_id = $1`, [clinicId]);
     await ds.query(`UPDATE scheduled_messages SET status = 'PENDING' WHERE appointment_id = $1 AND kind = 'REMINDER_24H'`, [apptId]);
     await dispatcher.runOnce();
-    expect((await statusOf('REMINDER_24H')).cancel_reason).toBe('WhatsApp no conectado');
+    expect(await statusOf('REMINDER_24H')).toEqual(expect.objectContaining({ status: 'PENDING', last_error: 'WhatsApp no conectado' }));
     expect(d360.sent).toHaveLength(0);
   });
 

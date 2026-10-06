@@ -17,6 +17,8 @@ const MAX_ATTEMPTS = 3;
 const BACKOFF_MIN = [5, 15];
 const BATCH = 50;
 const STALE_MS = 10 * 60_000;
+const POSTPONE_MS = 15 * 60_000;
+const NOT_CONNECTED = 'WhatsApp no conectado';
 
 interface Context {
   clinic: Clinic;
@@ -51,6 +53,7 @@ export class ReminderDispatcher implements OnApplicationBootstrap {
   async tick(): Promise<void> {
     if (!this.enabled) return;
     try {
+      await this.recoverStale();
       await this.runOnce();
     } catch (e) {
       this.logger.error(e);
@@ -76,22 +79,50 @@ export class ReminderDispatcher implements OnApplicationBootstrap {
       [this.clock.now()],
     );
     const ids = rowsOf<{ id: string }>(res).map((r) => r.id);
-    for (const id of ids) await this.process(id);
+    for (const id of ids) {
+      try {
+        await this.process(id);
+      } catch (e) {
+        // Un error inesperado no debe dejar el resto del lote en SENDING.
+        this.logger.error(e);
+        await this.ds.query(
+          `UPDATE scheduled_messages SET attempts = attempts + 1, last_error = $2, updated_at = now(),
+             status = CASE WHEN attempts + 1 >= ${MAX_ATTEMPTS} THEN 'FAILED'::scheduled_status ELSE 'PENDING'::scheduled_status END,
+             send_at = $3
+           WHERE id = $1`,
+          [id, (e as Error).message ?? String(e), new Date(this.clock.now().getTime() + BACKOFF_MIN[0] * 60_000)],
+        );
+      }
+    }
     return ids.length;
   }
 
   private async process(id: string): Promise<void> {
     const sm = await this.ds.getRepository(ScheduledMessage).findOneByOrFail({ id });
     const ctx = await this.loadContext(sm);
+    const repo = this.ds.getRepository(ScheduledMessage);
     const reason = this.skipReason(sm, ctx);
+    const now = this.clock.now().getTime();
+    if (reason === NOT_CONNECTED && ctx.appt && ctx.appt.startsAt.getTime() > now + POSTPONE_MS) {
+      // Desconexión temporal (p. ej. reconectando): se pospone en vez de perder el recordatorio.
+      await repo.update({ id }, { status: ScheduledStatus.PENDING, lastError: NOT_CONNECTED, sendAt: new Date(now + POSTPONE_MS) });
+      return;
+    }
     if (reason) {
-      await this.ds.getRepository(ScheduledMessage).update({ id }, { status: ScheduledStatus.CANCELLED, cancelReason: reason });
+      await repo.update({ id }, { status: ScheduledStatus.CANCELLED, cancelReason: reason });
+      return;
+    }
+    let payload: object;
+    let waMessageId: string;
+    try {
+      const creds = this.accounts.credentials(ctx.account!);
+      payload = this.buildPayload(sm, ctx, creds.sandbox);
+      ({ waMessageId } = await this.d360.send(creds, payload));
+    } catch (e) {
+      await this.fail(sm, e);
       return;
     }
     try {
-      const creds = this.accounts.credentials(ctx.account!);
-      const payload = this.buildPayload(sm, ctx, creds.sandbox);
-      const { waMessageId } = await this.d360.send(creds, payload);
       await this.ds.transaction(async (m) => {
         await m.update(ScheduledMessage, { id }, { status: ScheduledStatus.SENT, lastError: null });
         await this.messages.recordOutbound(
@@ -100,7 +131,9 @@ export class ReminderDispatcher implements OnApplicationBootstrap {
         );
       });
     } catch (e) {
-      await this.fail(sm, e);
+      // Ya se envió: nunca reintentar (sería un duplicado). Se marca SENT aunque no quede el registro del mensaje.
+      this.logger.error(`Recordatorio ${id} enviado pero no registrado: ${(e as Error).message}`);
+      await repo.update({ id }, { status: ScheduledStatus.SENT, lastError: `Enviado; no se pudo registrar: ${(e as Error).message}` });
     }
   }
 
@@ -114,7 +147,7 @@ export class ReminderDispatcher implements OnApplicationBootstrap {
 
   private skipReason(sm: ScheduledMessage, { clinic, appt, account }: Context): string | null {
     if (clinic.subscriptionStatus === SubscriptionStatus.SUSPENDED) return 'Suscripción suspendida';
-    if (!account || account.status !== WaAccountStatus.CONNECTED) return 'WhatsApp no conectado';
+    if (!account || account.status !== WaAccountStatus.CONNECTED) return NOT_CONNECTED;
     if (sm.kind === ScheduledKind.PAYMENT_REMINDER) return 'Recordatorio de pago no disponible todavía';
     if (!appt || appt.isBlock || !appt.patient || ![AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED].includes(appt.status)) {
       return 'Cita no vigente';
