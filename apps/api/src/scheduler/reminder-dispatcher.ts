@@ -11,6 +11,8 @@ import { reminder24h, reminder2h } from '../whatsapp/message-builders';
 import { MessagesService } from '../whatsapp/messages.service';
 import { WaAccountStatus, WhatsappAccount } from '../whatsapp/whatsapp-account.entity';
 import { WhatsappAccountsService } from '../whatsapp/whatsapp-accounts.service';
+import { TEMPLATE_FOR_KIND } from '../whatsapp/templates';
+import { WhatsappTemplatesService } from '../whatsapp/whatsapp-templates.service';
 import { ScheduledKind, ScheduledMessage, ScheduledStatus } from './scheduled-message.entity';
 
 const MAX_ATTEMPTS = 3;
@@ -19,11 +21,13 @@ const BATCH = 50;
 const STALE_MS = 10 * 60_000;
 const POSTPONE_MS = 15 * 60_000;
 const NOT_CONNECTED = 'WhatsApp no conectado';
+const TEMPLATE_NOT_APPROVED = 'Plantilla no aprobada todavía';
 
 interface Context {
   clinic: Clinic;
   appt: Appointment | null;
   account: WhatsappAccount | null;
+  approved: Set<string>;
 }
 
 /** TypeORM devuelve [filas, n] para UPDATE … RETURNING en Postgres. */
@@ -39,6 +43,7 @@ export class ReminderDispatcher implements OnApplicationBootstrap {
     private readonly d360: D360Client,
     private readonly accounts: WhatsappAccountsService,
     private readonly messages: MessagesService,
+    private readonly templates: WhatsappTemplatesService,
   ) {}
 
   private get enabled(): boolean {
@@ -103,9 +108,9 @@ export class ReminderDispatcher implements OnApplicationBootstrap {
     const repo = this.ds.getRepository(ScheduledMessage);
     const reason = this.skipReason(sm, ctx);
     const now = this.clock.now().getTime();
-    if (reason === NOT_CONNECTED && ctx.appt && ctx.appt.startsAt.getTime() > now + POSTPONE_MS) {
+    if ((reason === NOT_CONNECTED || reason === TEMPLATE_NOT_APPROVED) && ctx.appt && ctx.appt.startsAt.getTime() > now + POSTPONE_MS) {
       // Desconexión temporal (p. ej. reconectando): se pospone en vez de perder el recordatorio.
-      await repo.update({ id }, { status: ScheduledStatus.PENDING, lastError: NOT_CONNECTED, sendAt: new Date(now + POSTPONE_MS) });
+      await repo.update({ id }, { status: ScheduledStatus.PENDING, lastError: reason, sendAt: new Date(now + POSTPONE_MS) });
       return;
     }
     if (reason) {
@@ -142,12 +147,16 @@ export class ReminderDispatcher implements OnApplicationBootstrap {
     const appt = sm.appointmentId
       ? await this.ds.getRepository(Appointment).findOne({ where: { id: sm.appointmentId }, relations: { patient: true, service: true } })
       : null;
-    return { clinic, appt, account: await this.accounts.forClinic(sm.clinicId) };
+    const account = await this.accounts.forClinic(sm.clinicId);
+    const approved = account && !account.sandbox ? await this.templates.approvedNames(sm.clinicId) : new Set<string>();
+    return { clinic, appt, account, approved };
   }
 
-  private skipReason(sm: ScheduledMessage, { clinic, appt, account }: Context): string | null {
+  private skipReason(sm: ScheduledMessage, { clinic, appt, account, approved }: Context): string | null {
     if (clinic.subscriptionStatus === SubscriptionStatus.SUSPENDED) return 'Suscripción suspendida';
     if (!account || account.status !== WaAccountStatus.CONNECTED) return NOT_CONNECTED;
+    const templateName = TEMPLATE_FOR_KIND[sm.kind as 'REMINDER_24H' | 'REMINDER_2H'];
+    if (!account.sandbox && templateName && !approved.has(templateName)) return TEMPLATE_NOT_APPROVED;
     if (sm.kind === ScheduledKind.PAYMENT_REMINDER) return 'Recordatorio de pago no disponible todavía';
     if (!appt || appt.isBlock || !appt.patient || ![AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED].includes(appt.status)) {
       return 'Cita no vigente';
